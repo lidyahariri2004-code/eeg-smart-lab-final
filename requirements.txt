@@ -2,6 +2,7 @@ streamlit
 tensorflow-cpu
 numpy
 pandas
-pywavelets
 opencv-python-headless
+PyWavelets
 matplotlib
+scikit-learn
