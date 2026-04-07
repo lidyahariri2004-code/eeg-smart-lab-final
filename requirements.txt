@@ -1,7 +1,5 @@
 streamlit
-numpy
 pandas
-opencv-python-headless
-PyWavelets
-matplotlib
-scikit-learn
+numpy
+plotly
+tensorflow-cpu
