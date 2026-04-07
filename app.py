@@ -1,74 +1,45 @@
 import streamlit as st
-import os
 import sqlite3
-import pandas as pd
-import numpy as np
-from tensorflow.keras.models import load_model
+import os
 
-# --- إعداد قاعدة البيانات ---
-def init_db():
+# إعداد الصفحة للبرطابل
+st.set_page_config(page_title="EEG Smart Lab", layout="centered")
+
+# دالة للتحقق من الطبيب في قاعدة البيانات
+def check_doctor(username, password):
     conn = sqlite3.connect('medical_system.db')
     c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS doctor (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)')
-    conn.commit()
+    c.execute("SELECT * FROM doctor WHERE username=? AND password=?", (username, password))
+    data = c.fetchone()
     conn.close()
+    return data
 
-init_db()
-
-# --- تحميل الموديل ---
-@st.cache_resource
-def load_my_model():
-    if os.path.exists('model.keras'):
-        return load_model('model.keras')
-    return None
-
-model = load_my_model()
-
-# --- واجهة المستخدم ---
 st.title("🧠 EEG Smart Lab")
 
-if 'auth' not in st.session_state:
-    st.session_state.auth = False
+# إدارة الجلسة (Session State)
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
 
-if not st.session_state.auth:
-    menu = ["Login", "Register"]
-    choice = st.sidebar.selectbox("القائمة", menu)
-    
+if not st.session_state.logged_in:
+    st.subheader("تسجيل دخول الطبيب")
     user = st.text_input("اسم المستخدم")
-    pw = st.text_input("كلمة المرور", type='password')
+    pw = st.text_input("كلمة المرور", type="password")
     
-    if choice == "Register":
-        if st.button("إنشاء حساب"):
-            conn = sqlite3.connect('medical_system.db')
-            c = conn.cursor()
-            try:
-                c.execute('INSERT INTO doctor (username, password) VALUES (?,?)', (user, pw))
-                conn.commit()
-                st.success("تم التسجيل! روح لـ Login")
-            except:
-                st.error("المستخدم موجود")
-            conn.close()
-            
-    else:
-        if st.button("دخول"):
-            conn = sqlite3.connect('medical_system.db')
-            c = conn.cursor()
-            c.execute('SELECT * FROM doctor WHERE username=? AND password=?', (user, pw))
-            if c.fetchone():
-                st.session_state.auth = True
-                st.rerun()
-            else:
-                st.error("معلومات غلط")
-            conn.close()
-
+    if st.button("دخول"):
+        if check_doctor(user, pw):
+            st.session_state.logged_in = True
+            st.success("تم الدخول بنجاح!")
+            st.rerun()
+        else:
+            st.error("اسم المستخدم أو كلمة المرور خاطئة")
 else:
-    st.sidebar.success(f"مرحباً بك")
-    if st.sidebar.button("خروج"):
-        st.session_state.auth = False
+    st.sidebar.success("أهلاً بك أيها الطبيب")
+    if st.sidebar.button("تسجيل خروج"):
+        st.session_state.logged_in = False
         st.rerun()
-    
-    st.header("👨‍⚕️ فضاء الطبيب")
-    file = st.file_uploader("ارفع ملف الـ EEG", type=['csv'])
-    if file:
-        st.write("جاري التحليل...")
-        # هنا زيدي الـ logic تاع الـ scalogram اللي كان عندك
+        
+    st.header("👨‍⚕️ لوحة تحكم الطبيب")
+    uploaded_file = st.file_uploader("ارفع ملف EEG لتحليله (CSV)", type="csv")
+    if uploaded_file:
+        st.info("جاري المعالجة...")
+        # هنا يجي كود الـ Prediction
