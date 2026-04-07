@@ -2,92 +2,73 @@ import streamlit as st
 import os
 import sqlite3
 import pandas as pd
+import numpy as np
 from tensorflow.keras.models import load_model
 
-# --- 1. إعداد قاعدة البيانات (SQLite) ---
+# --- إعداد قاعدة البيانات ---
 def init_db():
     conn = sqlite3.connect('medical_system.db')
     c = conn.cursor()
-    # جدول الأطباء
-    c.execute('''CREATE TABLE IF NOT EXISTS doctor 
-                 (id INTEGER PRIMARY KEY, fname TEXT, lname TEXT, username TEXT UNIQUE, password TEXT)''')
-    # جدول المرضى
-    c.execute('''CREATE TABLE IF NOT EXISTS patient 
-                 (id INTEGER PRIMARY KEY, nom TEXT, prenom TEXT, username TEXT UNIQUE, password TEXT)''s''')
+    c.execute('CREATE TABLE IF NOT EXISTS doctor (id INTEGER PRIMARY KEY, username TEXT UNIQUE, password TEXT)')
     conn.commit()
     conn.close()
 
 init_db()
 
-# --- 2. تحميل الموديل ---
+# --- تحميل الموديل ---
 @st.cache_resource
-def get_model():
+def load_my_model():
     if os.path.exists('model.keras'):
         return load_model('model.keras')
     return None
 
-model = get_model()
+model = load_my_model()
 
-# --- 3. واجهة المستخدم (Streamlit UI) ---
-st.set_page_config(page_title="EEG Smart Lab Mobile", layout="centered")
+# --- واجهة المستخدم ---
+st.title("🧠 EEG Smart Lab")
 
-# إدارة الحالة (Session State) للتحقق من تسجيل الدخول
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.role = None
-    st.session_state.user_name = ""
+if 'auth' not in st.session_state:
+    st.session_state.auth = False
 
-# --- صفحة تسجيل الدخول ---
-if not st.session_state.logged_in:
-    st.title("🧠 EEG Smart Lab")
-    role = st.selectbox("تسجيل الدخول كـ:", ["طبيب (Doctor)", "مريض (Patient)", "أدمن (Admin)"])
+if not st.session_state.auth:
+    menu = ["Login", "Register"]
+    choice = st.sidebar.selectbox("القائمة", menu)
     
-    tab1, tab2 = st.tabs(["تسجيل الدخول", "إنشاء حساب جديد"])
+    user = st.text_input("اسم المستخدم")
+    pw = st.text_input("كلمة المرور", type='password')
     
-    with tab1:
-        user = st.text_input("اسم المستخدم")
-        pw = st.text_input("كلمة المرور", type="password")
+    if choice == "Register":
+        if st.button("إنشاء حساب"):
+            conn = sqlite3.connect('medical_system.db')
+            c = conn.cursor()
+            try:
+                c.execute('INSERT INTO doctor (username, password) VALUES (?,?)', (user, pw))
+                conn.commit()
+                st.success("تم التسجيل! روح لـ Login")
+            except:
+                st.error("المستخدم موجود")
+            conn.close()
+            
+    else:
         if st.button("دخول"):
             conn = sqlite3.connect('medical_system.db')
             c = conn.cursor()
-            table = "doctor" if "طبيب" in role else "patient"
-            c.execute(f"SELECT * FROM {table} WHERE username=? AND password=?", (user, pw))
-            result = c.fetchone()
-            conn.close()
-            
-            if result:
-                st.session_state.logged_in = True
-                st.session_state.role = role
-                st.session_state.user_name = user
+            c.execute('SELECT * FROM doctor WHERE username=? AND password=?', (user, pw))
+            if c.fetchone():
+                st.session_state.auth = True
                 st.rerun()
             else:
-                st.error("خطأ في اسم المستخدم أو كلمة المرور")
+                st.error("معلومات غلط")
+            conn.close()
 
-    with tab2:
-        new_user = st.text_input("اسم مستخدم جديد")
-        new_pw = st.text_input("كلمة مرور جديدة", type="password")
-        if st.button("تسجيل حساب"):
-            try:
-                conn = sqlite3.connect('medical_system.db')
-                c = conn.cursor()
-                table = "doctor" if "طبيب" in role else "patient"
-                c.execute(f"INSERT INTO {table} (username, password) VALUES (?,?)", (new_user, new_pw))
-                conn.commit()
-                conn.close()
-                st.success("تم التسجيل بنجاح! يمكنك الآن تسجيل الدخول.")
-            except:
-                st.error("اسم المستخدم موجود مسبقاً")
-
-# --- صفحة الداشبورد بعد الدخول ---
 else:
-    st.sidebar.title(f"مرحباً {st.session_state.user_name}")
-    if st.sidebar.button("تسجيل الخروج"):
-        st.session_state.logged_in = False
+    st.sidebar.success(f"مرحباً بك")
+    if st.sidebar.button("خروج"):
+        st.session_state.auth = False
         st.rerun()
-
-    if "طبيب" in st.session_state.role:
-        st.header("👨‍⚕️ فضاء الطبيب")
-        uploaded_file = st.file_uploader("ارفع ملف EEG (CSV)", type="csv")
-        if uploaded_file:
-            st.info("جاري المعالجة...")
-            # هنا تحطي كود الـ Prediction تاعك
+    
+    st.header("👨‍⚕️ فضاء الطبيب")
+    file = st.file_uploader("ارفع ملف الـ EEG", type=['csv'])
+    if file:
+        st.write("جاري التحليل...")
+        # هنا زيدي الـ logic تاع الـ scalogram اللي كان عندك
