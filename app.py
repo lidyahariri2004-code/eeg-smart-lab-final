@@ -2,44 +2,36 @@ import streamlit as st
 import sqlite3
 import os
 
-# إعداد الصفحة للبرطابل
+# إعداد الصفحة
 st.set_page_config(page_title="EEG Smart Lab", layout="centered")
 
-# دالة للتحقق من الطبيب في قاعدة البيانات
-def check_doctor(username, password):
+def check_doctor(user, pw):
     conn = sqlite3.connect('medical_system.db')
     c = conn.cursor()
-    c.execute("SELECT * FROM doctor WHERE username=? AND password=?", (username, password))
+    c.execute("SELECT * FROM doctor WHERE username=? AND password=?", (user, pw))
     data = c.fetchone()
     conn.close()
     return data
 
 st.title("🧠 EEG Smart Lab")
 
-# إدارة الجلسة (Session State)
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
+if 'login' not in st.session_state:
+    st.session_state.login = False
 
-if not st.session_state.logged_in:
+if not st.session_state.login:
     st.subheader("تسجيل دخول الطبيب")
-    user = st.text_input("اسم المستخدم")
-    pw = st.text_input("كلمة المرور", type="password")
-    
-    if st.button("دخول"):
-        if check_doctor(user, pw):
-            st.session_state.logged_in = True
-            st.success("تم الدخول بنجاح!")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type='password')
+    if st.button("Log In"):
+        if check_doctor(username, password):
+            st.session_state.login = True
             st.rerun()
         else:
-            st.error("اسم المستخدم أو كلمة المرور خاطئة")
+            st.error("خطأ في البيانات")
 else:
-    st.sidebar.success("أهلاً بك أيها الطبيب")
-    if st.sidebar.button("تسجيل خروج"):
-        st.session_state.logged_in = False
+    st.sidebar.success("مرحباً بك")
+    if st.sidebar.button("Logout"):
+        st.session_state.login = False
         st.rerun()
-        
-    st.header("👨‍⚕️ لوحة تحكم الطبيب")
-    uploaded_file = st.file_uploader("ارفع ملف EEG لتحليله (CSV)", type="csv")
-    if uploaded_file:
-        st.info("جاري المعالجة...")
-        # هنا يجي كود الـ Prediction
+    st.header("فضاء الطبيب")
+    st.file_uploader("ارفع ملف EEG", type=['csv'])
