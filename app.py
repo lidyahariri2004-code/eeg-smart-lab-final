@@ -2,34 +2,37 @@ import streamlit as st
 import sqlite3
 import os
 
-# 1. إعداد الصفحة وتنسيقها
+# --- إعداد الصفحة ---
 st.set_page_config(page_title="EEG Smart Lab", layout="centered")
 
-# 2. دالة التعامل مع قاعدة البيانات
-def check_user(username, password, table):
+# --- دالة التعامل مع قاعدة البيانات ---
+def get_db_connection():
     conn = sqlite3.connect('medical_system.db')
-    c = conn.cursor()
-    # التحقق إذا كان المستخدم موجود في الجدول المختار (doctor أو patient)
-    query = f"SELECT * FROM {table} WHERE username=? AND password=?"
-    c.execute(query, (username, password))
-    data = c.fetchone()
-    conn.close()
-    return data
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# 3. إدارة حالة الدخول (Session State)
+def init_db():
+    conn = get_db_connection()
+    # جدول الأطباء فيه كامل المعلومات تاع الفورم تاعك
+    conn.execute('''CREATE TABLE IF NOT EXISTS doctor 
+                 (id INTEGER PRIMARY KEY, fname TEXT, lname TEXT, email TEXT, username TEXT UNIQUE, password TEXT)''')
+    conn.commit()
+    conn.close()
+
+init_db()
+
+# --- إدارة حالة الدخول ---
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
-    st.session_state.user_role = None
+    st.session_state.role = None
     st.session_state.user_name = ""
 
 # --- الواجهة الرئيسية ---
 if not st.session_state.logged_in:
     st.title("🧠 EEG Smart Lab")
-    st.markdown("### مرحباً بك، اختر صفتك للدخول:")
+    st.markdown("### اختر صفتك للدخول")
     
-    # الأزرار الثلاثة اللي حبيتيهم
     col1, col2, col3 = st.columns(3)
-    
     with col1:
         if st.button("👨‍⚕️ طبيب (Doctor)", use_container_width=True):
             st.session_state.temp_role = "doctor"
@@ -40,50 +43,69 @@ if not st.session_state.logged_in:
         if st.button("⚙️ أدمن (Admin)", use_container_width=True):
             st.session_state.temp_role = "admin"
 
-    # إذا ضغط على واحد من الأزرار، تظهر خانات الـ Login
     if 'temp_role' in st.session_state:
         st.divider()
-        st.subheader(f"تسجيل الدخول كـ {st.session_state.temp_role}")
-        user = st.text_input("اسم المستخدم (Username)")
-        pw = st.text_input("كلمة المرور (Password)", type="password")
         
-        if st.button("دخول"):
-            # الأدمن عنده دخول خاص (تقدري تبدليه)
-            if st.session_state.temp_role == "admin" and user == "admin" and pw == "123":
-                st.session_state.logged_in = True
-                st.session_state.user_role = "admin"
-                st.rerun()
+        # إذا اختار طبيب، نظهر له خيارين (دخول أو تسجيل)
+        if st.session_state.temp_role == "doctor":
+            tab1, tab2 = st.tabs(["تسجيل الدخول (Login)", "إنشاء حساب جديد (Register)"])
             
-            # الطبيب والمريض نتحقق من قاعدة البيانات
-            elif st.session_state.temp_role in ["doctor", "patient"]:
-                result = check_user(user, pw, st.session_state.temp_role)
-                if result:
-                    st.session_state.logged_in = True
-                    st.session_state.user_role = st.session_state.temp_role
-                    st.session_state.user_name = user
-                    st.rerun()
-                else:
-                    st.error("❌ عذراً، اسم المستخدم أو كلمة المرور غير موجودة في قاعدة البيانات.")
+            with tab1:
+                u = st.text_input("Username", key="login_u")
+                p = st.text_input("Password", type="password", key="login_p")
+                if st.button("دخول"):
+                    conn = get_db_connection()
+                    user = conn.execute("SELECT * FROM doctor WHERE username=? AND password=?", (u, p)).fetchone()
+                    conn.close()
+                    if user:
+                        st.session_state.logged_in = True
+                        st.session_state.role = "doctor"
+                        st.session_state.user_name = f"{user['fname']} {user['lname']}"
+                        st.rerun()
+                    else:
+                        st.error("❌ معلومات خاطئة")
+
+            with tab2:
+                st.subheader("📝 استمارة التسجيل")
+                # تطبيق الفورم اللي بعثتيها
+                c1, c2 = st.columns(2)
+                with c1: fname = st.text_input("Prénom")
+                with c2: lname = st.text_input("Nom")
+                email = st.text_input("Adresse Email")
+                username = st.text_input("Nom d'utilisateur")
+                password = st.text_input("Mot de passe", type="password")
+                
+                st.divider()
+                # إضافة جزء الاشتراك
+                st.info("💳 **خطة الاشتراك الاحترافية**")
+                st.write("للحصول على الخدمة، يرجى دفع مبلغ: **100,000 DZD / سنة**")
+                agree = st.checkbox("أوافق على الاشتراك والدفع لاحقاً")
+                
+                if st.button("S'INSCRIRE MAINTENANT"):
+                    if agree and username and password:
+                        try:
+                            conn = get_db_connection()
+                            conn.execute("INSERT INTO doctor (fname, lname, email, username, password) VALUES (?,?,?,?,?)",
+                                         (fname, lname, email, username, password))
+                            conn.commit()
+                            conn.close()
+                            st.success("✅ تم التسجيل بنجاح! يمكنك الآن تسجيل الدخول.")
+                        except:
+                            st.error("❌ اسم المستخدم موجود مسبقاً")
+                    else:
+                        st.warning("⚠️ يرجى ملء كل الخانات والموافقة على الاشتراك")
+
+        # هنا تقدري تزيدي نفس المنطق للمريض والأدمن إذا حبيتي
+        else:
+            st.info(f"واجهة الـ {st.session_state.temp_role} قيد التطوير")
 
 # --- الواجهة بعد الدخول ---
 else:
-    st.sidebar.success(f"متصل كـ: {st.session_state.user_role}")
-    if st.sidebar.button("تسجيل الخروج"):
+    st.sidebar.title(f"أهلاً {st.session_state.user_name}")
+    if st.sidebar.button("Logout"):
         st.session_state.logged_in = False
-        st.session_state.temp_role = None
         st.rerun()
-
-    if st.session_state.user_role == "doctor":
-        st.header("👨‍⚕️ لوحة تحكم الطبيب")
-        st.write(f"أهلاً دكتور {st.session_state.user_name}")
-        file = st.file_uploader("ارفع ملف EEG لتحليله", type=['csv'])
-        if file:
-            st.success("تم رفع الملف، النظام جاهز للتحليل.")
-
-    elif st.session_state.user_role == "patient":
-        st.header("👤 فضاء المريض")
-        st.write("هنا يمكنك الاطلاع على نتائجك.")
-
-    elif st.session_state.user_role == "admin":
-        st.header("⚙️ لوحة التحكم (Admin)")
-        st.write("إدارة المستخدمين وقاعدة البيانات.")
+        
+    if st.session_state.role == "doctor":
+        st.header("👨‍⚕️ فضاء الطبيب")
+        st.file_uploader("ارفع ملف الإشارة لتحليلها")
